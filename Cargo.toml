@@ -1,0 +1,7 @@
+[package]
+name = "ferox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fermium = "22605.0.0"
