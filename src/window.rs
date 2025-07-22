@@ -1,4 +1,5 @@
 use fermium::prelude::*;
+use log::info;
 
 #[repr(C)]
 pub struct UserApp {
@@ -70,20 +71,29 @@ fn update(ps: &mut ProgramState) {
 
     if pending_events {
         let event_type = unsafe { event.type_ };
-        if event_type == SDL_QUIT || event_type == SDL_KEYDOWN {
+        if event_type == SDL_QUIT {
             ps.done = true;
+        } else if event_type == SDL_KEYDOWN {
+            let key = unsafe { event.key.keysym.sym };
+            if key == SDLK_ESCAPE {
+                ps.done = true;
+            } else {
+                info!("Key pressed: {:?}", key);
+            }
+        } else if event_type == SDL_MOUSEMOTION {
+            let mouse_x = unsafe { event.motion.x };
+            let mouse_y = unsafe { event.motion.y };
+            info!("Mouse moved to: ({}, {})", mouse_x, mouse_y);
+        } else if event_type == SDL_MOUSEBUTTONDOWN {
+            let button = unsafe { event.button.button };
+            let mouse_x = unsafe { event.button.x };
+            let mouse_y = unsafe { event.button.y };
+            info!(
+                "Mouse button {:?} pressed at: ({}, {})",
+                button, mouse_x, mouse_y
+            );
         }
     }
 }
 
-fn render(renderer: *mut SDL_Renderer, _ps: &ProgramState) {
-    unsafe {
-        let r = ((SDL_GetTicks() / 5) % 256) as u8;
-        let g = ((SDL_GetTicks() / 10) % 256) as u8;
-        let b = ((SDL_GetTicks() / 15) % 256) as u8;
-
-        SDL_SetRenderDrawColor(renderer, r, g, b, 255);
-        SDL_RenderClear(renderer);
-        SDL_RenderPresent(renderer);
-    }
-}
+fn render(_renderer: *mut SDL_Renderer, _ps: &ProgramState) {}
