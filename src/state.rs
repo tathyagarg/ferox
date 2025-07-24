@@ -1,8 +1,13 @@
 use std::sync::Arc;
-use winit::window::Window;
+use winit::{dpi::PhysicalPosition, keyboard::ModifiersState, window::Window};
 
+#[derive(Debug)]
 pub struct State {
     window: Arc<Window>,
+    modifiers_state: ModifiersState,
+
+    cursor_position: Option<PhysicalPosition<f64>>,
+
     device: wgpu::Device,
     queue: wgpu::Queue,
     size: winit::dpi::PhysicalSize<u32>,
@@ -30,6 +35,8 @@ impl State {
 
         let state = State {
             window,
+            cursor_position: None,
+            modifiers_state: Default::default(),
             device,
             queue,
             size,
@@ -67,6 +74,14 @@ impl State {
 
         // reconfigure the surface
         self.configure_surface();
+    }
+
+    pub fn update_cursor_position(&mut self, position: PhysicalPosition<f64>) {
+        self.cursor_position = Some(position);
+    }
+
+    pub fn get_cursor_position(&self) -> Option<PhysicalPosition<f64>> {
+        self.cursor_position
     }
 
     pub fn render(&mut self) {
