@@ -17,7 +17,7 @@ fn common(#[cfg(target_arch = "wasm32")] event_loop: EventLoop<State>) {
     // event_loop.set_control_flow(ControlFlow::Poll);
     //
     #[cfg(not(target_arch = "wasm32"))]
-    let event_loop: EventLoop<State> = EventLoop::<State>::builder().build().unwrap();
+    let event_loop = EventLoop::with_user_event().build().unwrap();
 
     event_handlers.get_or_init(|| Mutex::new(HashMap::new()));
     let mut app = application::App::new(
@@ -54,6 +54,8 @@ fn run() {
     }
 }
 
-fn main() {
+#[cfg(target_arch = "wasm32")]
+fn run_web() {
+    console_error_panic_hook::set_once();
     run();
 }

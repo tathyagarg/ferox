@@ -4,8 +4,35 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.98"
+cfg-if = "1.0.1"
 env_logger = "0.11.8"
 log = "0.4.27"
 pollster = "0.4.0"
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+wasm-logger = "0.2.0"
+web-sys = "0.3"
 wgpu = "26.0.1"
 winit = "0.30.11"
+
+[dev-dependencies]
+web-sys = "0.3.77"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+strip = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "1.0"
+wgpu = { version = "26.0.1", features = ["webgl"]}
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Element",
+]}

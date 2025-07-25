@@ -1,6 +1,6 @@
 use log::info;
 use std::{sync::Arc, time::Instant};
-use wgpu::Color;
+use wgpu::{Backends, Color};
 
 use winit::{dpi::PhysicalPosition, keyboard::ModifiersState, window::Window};
 
@@ -56,24 +56,51 @@ fn queue_callback() {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
-        let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
-            .await
-            .unwrap();
-        let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
-            .await
-            .unwrap();
-
-        queue.on_submitted_work_done(queue_callback);
+    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            #[cfg(not(target_arch = "wasm32"))]
+            backends: Backends::PRIMARY,
+            #[cfg(target_arch = "wasm32")]
+            backends: Backends::GL,
+            ..Default::default()
+        });
 
         let size = window.inner_size();
 
         let surface = instance.create_surface(window.clone()).unwrap();
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await?;
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: wgpu::Features::empty(),
+                required_limits: if cfg!(target_arch = "wasm32") {
+                    wgpu::Limits::downlevel_webgl2_defaults()
+                } else {
+                    wgpu::Limits::default()
+                },
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await?;
+
+        queue.on_submitted_work_done(queue_callback);
+
         let cap = surface.get_capabilities(&adapter);
-        let surface_format = cap.formats[0];
+
+        let surface_format = cap
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .copied()
+            .unwrap_or(cap.formats[0]);
 
         let state = State {
             window,
@@ -91,7 +118,7 @@ impl State {
         // Configure surface for the first time
         state.configure_surface();
 
-        state
+        Ok(state)
     }
 
     pub fn get_window(&self) -> &Window {
@@ -108,7 +135,7 @@ impl State {
             width: self.size.width,
             height: self.size.height,
             desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Fifo,
         };
         self.surface.configure(&self.device, &surface_config);
     }

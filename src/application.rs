@@ -1,4 +1,6 @@
 use log::{info, warn};
+#[cfg(target_arch = "wasm32")]
+use winit::event_loop::{EventLoop, EventLoopProxy};
 
 use std::sync::Arc;
 use winit::{
@@ -9,24 +11,44 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::inputs::{self, Binding, actions::Action};
 use crate::state;
+use crate::{
+    inputs::{self, Binding, actions::Action},
+    state::State,
+};
 
 #[derive(Default)]
 pub struct App {
-    pub state: Option<state::State>,
+    #[cfg(target_arch = "wasm32")]
+    proxy: Option<EventLoopProxy<State>>,
+    state: Option<state::State>,
 
     pub keybindings: Vec<Binding>,
 }
 
 impl App {
-    pub fn new() -> Self {
+    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>) -> Self {
         let keybindings = inputs::get_keybindings().to_vec();
+
+        #[cfg(target_arch = "wasm32")]
+        let proxy = Some(event_loop.create_proxy());
+
         Self {
+            #[cfg(target_arch = "wasm32")]
+            proxy,
             state: None,
             keybindings,
         }
     }
+
+    // pub fn from_window(window: Arc<Window>) -> Self {
+    //     let state = pollster::block_on(state::State::new(window)).unwrap();
+    //     let keybindings = inputs::get_keybindings().to_vec();
+    //     Self {
+    //         state: Some(state),
+    //         keybindings,
+    //     }
+    // }
 
     fn add_keybinding(&mut self, binding: Binding) {
         self.keybindings.push(binding);
@@ -37,23 +59,53 @@ impl App {
     }
 }
 
-impl ApplicationHandler for App {
+impl ApplicationHandler<State> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // Create window object
-        let window = Arc::new(
-            event_loop
-                .create_window(Window::default_attributes())
-                .unwrap(),
-        );
+        #[allow(unused_mut)]
+        let mut window_attributes = Window::default_attributes();
 
-        let state = pollster::block_on(state::State::new(window.clone()));
-        self.state = Some(state);
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::{JsCast, UnwrapThrowExt};
+            use winit::platform::web::WindowAttributesExtWebSys;
 
-        window.request_redraw();
+            const CANVAS_ID: &str = "canvas";
+
+            let window = wgpu::web_sys::window().unwrap_throw();
+            let document = window.document().unwrap_throw();
+            let canvas = document.get_element_by_id(CANVAS_ID).unwrap_throw();
+
+            let canvas_element = canvas.unchecked_into();
+
+            window_attributes = window_attributes.with_canvas(Some(canvas_element));
+        }
+
+        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.state = Some(pollster::block_on(state::State::new(window.clone())).unwrap());
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            if let Some(proxy) = self.proxy.take() {
+                wasm_bindgen_futures::spawn_local(async move {
+                    assert!(
+                        proxy
+                            .send_event(State::new(window).await.expect("Failed to create state"))
+                            .is_ok()
+                    );
+                });
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let state = self.state.as_mut().unwrap();
+        let state = match &mut self.state {
+            Some(canvas) => canvas,
+            None => return,
+        };
 
         match event {
             WindowEvent::CloseRequested => {
