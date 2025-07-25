@@ -49,8 +49,6 @@ impl ApplicationHandler for App {
         let state = pollster::block_on(state::State::new(window.clone()));
         self.state = Some(state);
 
-        self.state.as_mut().unwrap().render();
-
         window.request_redraw();
     }
 
@@ -62,13 +60,16 @@ impl ApplicationHandler for App {
                 info!("The close button was pressed; stopping");
                 event_loop.exit();
             }
-            WindowEvent::RedrawRequested => {
-                state.get_window().request_redraw();
-            }
             WindowEvent::Resized(size) => {
                 // Reconfigures the size of the surface. We do not re-render
                 // here as this event is always followed up by redraw request.
                 state.resize(size);
+            }
+            WindowEvent::RedrawRequested => {
+                state.render();
+                state.frame_counter.update();
+
+                state.get_window().request_redraw();
             }
             WindowEvent::KeyboardInput {
                 event,
